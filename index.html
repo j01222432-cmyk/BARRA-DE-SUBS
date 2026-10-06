@@ -160,7 +160,7 @@
 
     .lista li {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto auto auto;
       gap: 12px;
       align-items: center;
       padding: 10px 12px;
@@ -168,8 +168,19 @@
       background: #0a0a0f;
     }
 
-    .cantidad {
+    .cantidad,
+    .soles {
       font-weight: 700;
+    }
+
+    .soles,
+    .equivalencia {
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .equivalencia {
+      margin-top: 10px;
+      font-size: 0.92rem;
     }
 
     .acciones {
@@ -250,6 +261,7 @@
         </label>
         <button type="submit">Agregar</button>
       </form>
+      <p class="equivalencia" id="equivalencia">Cada sub vale S/ 18.64</p>
       <p class="error" id="error" role="alert"></p>
       <p class="vacio" id="vacio">Todavía no hay retos.</p>
       <p class="aviso" id="aviso" hidden>Orden manual. Pulsa «Menor a mayor» para volver a ordenar.</p>
@@ -267,7 +279,9 @@
     const formEl = document.getElementById("reto-form");
     const nombreEl = document.getElementById("nombre");
     const cantidadEl = document.getElementById("cantidad");
+    const VALOR_SUB_SOLES = 18.64;
     const errorEl = document.getElementById("error");
+    const equivalenciaEl = document.getElementById("equivalencia");
     const vacioEl = document.getElementById("vacio");
     const avisoEl = document.getElementById("aviso");
     const ordenarEl = document.getElementById("ordenar");
@@ -294,6 +308,15 @@
       render();
     });
 
+    cantidadEl.addEventListener("input", () => {
+      const cantidad = Number(cantidadEl.value);
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        equivalenciaEl.textContent = "Cada sub vale " + formatSoles(VALOR_SUB_SOLES);
+        return;
+      }
+      equivalenciaEl.textContent = formatNumber(cantidad) + " subs = " + formatSoles(cantidad * VALOR_SUB_SOLES);
+    });
+
     formEl.addEventListener("submit", (event) => {
       event.preventDefault();
       const nombre = nombreEl.value.trim();
@@ -313,6 +336,7 @@
       nombreEl.value = "";
       cantidadEl.value = "";
       errorEl.textContent = "";
+      equivalenciaEl.textContent = "Cada sub vale " + formatSoles(VALOR_SUB_SOLES);
       save();
       render();
       nombreEl.focus();
@@ -372,7 +396,7 @@
       labelEl.textContent = shown + "%";
       barEl.setAttribute("aria-valuenow", String(Math.max(0, Math.min(shown, 100))));
       barEl.setAttribute("aria-valuetext", shown + "%");
-      totalEl.textContent = formatNumber(total) + " de " + formatNumber(state.objetivo);
+      totalEl.textContent = formatNumber(total) + " de " + formatNumber(state.objetivo) + " · " + formatSoles(total * VALOR_SUB_SOLES);
 
       const manual = state.orden === "manual";
       ordenarEl.setAttribute("aria-pressed", manual ? "false" : "true");
@@ -383,6 +407,7 @@
         const item = document.createElement("li");
         const nombre = document.createElement("span");
         const cantidad = document.createElement("span");
+        const soles = document.createElement("span");
         const acciones = document.createElement("div");
         const subir = document.createElement("button");
         const bajar = document.createElement("button");
@@ -405,7 +430,9 @@
 
         nombre.textContent = reto.nombre;
         cantidad.className = "cantidad";
-        cantidad.textContent = formatNumber(reto.cantidad);
+        cantidad.textContent = formatNumber(reto.cantidad) + " subs";
+        soles.className = "soles";
+        soles.textContent = formatSoles(reto.cantidad * VALOR_SUB_SOLES);
         acciones.className = "acciones";
 
         subir.type = "button";
@@ -430,7 +457,7 @@
         });
 
         acciones.append(subir, bajar, quitar);
-        item.append(nombre, cantidad, acciones);
+        item.append(nombre, cantidad, soles, acciones);
         listaEl.append(item);
       });
 
@@ -439,6 +466,15 @@
 
     function formatNumber(value) {
       return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 }).format(value);
+    }
+
+    function formatSoles(value) {
+      return new Intl.NumberFormat("es-PE", {
+        style: "currency",
+        currency: "PEN",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(value);
     }
   </script>
 </body>

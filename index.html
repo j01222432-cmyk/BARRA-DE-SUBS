@@ -51,15 +51,27 @@
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
     }
 
-    .fill {
-      width: 0%;
+    .segmentos {
+      position: absolute;
+      inset: 0;
+      display: flex;
       height: 100%;
-      background: linear-gradient(90deg, #7c3aed, #ec4899);
-      transition: width 0.35s ease;
+    }
+
+    .segmento {
+      flex: 0 0 auto;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset -2px 0 0 rgba(10, 10, 15, 0.9);
+    }
+
+    .pintura {
+      height: 100%;
     }
 
     .label {
       position: absolute;
+      z-index: 1;
       inset: 0;
       display: flex;
       align-items: center;
@@ -83,6 +95,12 @@
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 16px;
+    }
+
+    .ordenes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     .panel h1 {
@@ -114,9 +132,15 @@
       font: inherit;
     }
 
+    .datos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
     .objetivo {
       max-width: 180px;
-      margin-bottom: 16px;
     }
 
     .reto-form {
@@ -158,9 +182,15 @@
       list-style: none;
     }
 
+    .marca {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+    }
+
     .lista li {
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: auto 1fr auto auto auto;
       gap: 12px;
       align-items: center;
       padding: 10px 12px;
@@ -253,7 +283,7 @@
         aria-valuetext="0%"
         aria-label="Progreso de retos"
       >
-        <div class="fill" id="fill"></div>
+        <div class="segmentos" id="segmentos"></div>
         <span class="label" id="label">0%</span>
       </div>
     </section>
@@ -261,12 +291,21 @@
     <section class="panel">
       <div class="panel-head">
         <h1>Retos</h1>
-        <button type="button" class="ordenar" id="ordenar" aria-pressed="true">Menor a mayor</button>
+        <div class="ordenes">
+          <button type="button" class="ordenar" id="ordenar-asc" aria-pressed="true">Menor a mayor</button>
+          <button type="button" class="ordenar" id="ordenar-desc" aria-pressed="false">Mayor a menor</button>
+        </div>
       </div>
-      <label class="objetivo">
-        Objetivo por subs
-        <input id="objetivo" type="number" min="1" step="any" value="100">
-      </label>
+      <div class="datos">
+        <label class="objetivo">
+          Objetivo por subs
+          <input id="objetivo" type="number" min="1" step="any" value="100">
+        </label>
+        <label class="objetivo">
+          Subs recibidos
+          <input id="recibidos" type="number" min="0" step="any" value="0">
+        </label>
+      </div>
 
       <form class="reto-form" id="reto-form">
         <label>
@@ -282,7 +321,7 @@
       <p class="equivalencia" id="equivalencia">Cada sub vale S/ 18.64</p>
       <p class="error" id="error" role="alert"></p>
       <p class="vacio" id="vacio">Todavía no hay retos.</p>
-      <p class="aviso" id="aviso" hidden>Orden manual. Pulsa «Menor a mayor» para volver a ordenar.</p>
+      <p class="aviso" id="aviso" hidden>Orden manual. Pulsa «Menor a mayor» o «Mayor a menor» para volver a ordenar.</p>
       <ul class="lista" id="lista"></ul>
     </section>
   </main>
@@ -291,9 +330,11 @@
     const STORAGE_KEY = "barra-de-subs";
     const totalEl = document.getElementById("total");
     const barEl = document.getElementById("bar");
-    const fillEl = document.getElementById("fill");
+    const segmentosEl = document.getElementById("segmentos");
+    const COLORES = ["#7c3aed", "#db2777", "#f97316", "#06b6d4", "#eab308", "#22c55e", "#f43f5e", "#6366f1"];
     const labelEl = document.getElementById("label");
     const objetivoEl = document.getElementById("objetivo");
+    const recibidosEl = document.getElementById("recibidos");
     const formEl = document.getElementById("reto-form");
     const nombreEl = document.getElementById("nombre");
     const cantidadEl = document.getElementById("cantidad");
@@ -302,28 +343,33 @@
     const equivalenciaEl = document.getElementById("equivalencia");
     const vacioEl = document.getElementById("vacio");
     const avisoEl = document.getElementById("aviso");
-    const ordenarEl = document.getElementById("ordenar");
+    const ordenarAscEl = document.getElementById("ordenar-asc");
+    const ordenarDescEl = document.getElementById("ordenar-desc");
     const listaEl = document.getElementById("lista");
     let arrastrado = null;
     let editandoId = null;
 
     const state = load();
     objetivoEl.value = String(state.objetivo);
-    if (state.orden !== "manual") state.retos = ordenar(state.retos);
+    recibidosEl.value = String(state.recibidos);
+    if (state.orden !== "manual") state.retos = ordenar(state.retos, state.orden);
     render();
 
-    ordenarEl.addEventListener("click", () => {
-      editandoId = null;
-      state.orden = "auto";
-      state.retos = ordenar(state.retos);
-      save();
-      render();
-    });
+    ordenarAscEl.addEventListener("click", () => aplicarOrden("asc"));
+    ordenarDescEl.addEventListener("click", () => aplicarOrden("desc"));
 
     objetivoEl.addEventListener("input", () => {
       const objetivo = Number(objetivoEl.value);
       if (!Number.isFinite(objetivo) || objetivo <= 0) return;
       state.objetivo = objetivo;
+      save();
+      render();
+    });
+
+    recibidosEl.addEventListener("input", () => {
+      const recibidos = Number(recibidosEl.value);
+      if (!Number.isFinite(recibidos) || recibidos < 0) return;
+      state.recibidos = recibidos;
       save();
       render();
     });
@@ -352,7 +398,7 @@
         nombre,
         cantidad
       });
-      if (state.orden !== "manual") state.retos = ordenar(state.retos);
+      if (state.orden !== "manual") state.retos = ordenar(state.retos, state.orden);
       editandoId = null;
       nombreEl.value = "";
       cantidadEl.value = "";
@@ -367,10 +413,12 @@
       try {
         const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
         const objetivo = Number(data && data.objetivo);
+        const recibidos = Number(data && data.recibidos);
         const retos = Array.isArray(data && data.retos) ? data.retos : [];
         return {
           objetivo: Number.isFinite(objetivo) && objetivo > 0 ? objetivo : 100,
-          orden: data && data.orden === "manual" ? "manual" : "auto",
+          recibidos: Number.isFinite(recibidos) && recibidos >= 0 ? recibidos : 0,
+          orden: data && data.orden === "manual" ? "manual" : data && data.orden === "desc" ? "desc" : "asc",
           retos: retos
             .filter((reto) => reto && String(reto.nombre || "").trim() && Number(reto.cantidad) > 0)
             .map((reto) => ({
@@ -380,7 +428,7 @@
             }))
         };
       } catch {
-        return { objetivo: 100, orden: "auto", retos: [] };
+        return { objetivo: 100, recibidos: 0, orden: "asc", retos: [] };
       }
     }
 
@@ -392,11 +440,24 @@
       return state.retos.reduce((total, reto) => total + reto.cantidad, 0);
     }
 
-    function ordenar(retos) {
+    function ordenar(retos, direccion) {
+      const factor = direccion === "desc" ? -1 : 1;
       return retos
         .map((reto, index) => ({ reto, index }))
-        .sort((a, b) => a.reto.cantidad - b.reto.cantidad || a.index - b.index)
+        .sort((a, b) => (a.reto.cantidad - b.reto.cantidad) * factor || a.index - b.index)
         .map((item) => item.reto);
+    }
+
+    function aplicarOrden(direccion) {
+      editandoId = null;
+      state.orden = direccion;
+      state.retos = ordenar(state.retos, direccion);
+      save();
+      render();
+    }
+
+    function colorDe(index) {
+      return COLORES[index % COLORES.length];
     }
 
     function mover(id, destino) {
@@ -424,7 +485,7 @@
 
       reto.nombre = nombre;
       reto.cantidad = cantidad;
-      if (state.orden !== "manual") state.retos = ordenar(state.retos);
+      if (state.orden !== "manual") state.retos = ordenar(state.retos, state.orden);
       editandoId = null;
       errorEl.textContent = "";
       save();
@@ -432,22 +493,52 @@
     }
 
     function render() {
-      const total = suma();
-      const pct = (total / state.objetivo) * 100;
+      const pct = (state.recibidos / state.objetivo) * 100;
       const shown = Math.round(pct);
-      fillEl.style.width = Math.max(0, Math.min(pct, 100)) + "%";
+      let restante = Math.max(state.recibidos, 0);
+      segmentosEl.replaceChildren();
+      state.retos.forEach((reto, index) => {
+        const pintado = Math.min(reto.cantidad, restante);
+        restante -= pintado;
+        const segmento = document.createElement("div");
+        const pintura = document.createElement("div");
+        segmento.className = "segmento";
+        segmento.style.width = (reto.cantidad / state.objetivo) * 100 + "%";
+        segmento.style.background = colorDe(index) + "33";
+        pintura.className = "pintura";
+        pintura.style.width = reto.cantidad > 0 ? (pintado / reto.cantidad) * 100 + "%" : "0%";
+        pintura.style.background = colorDe(index);
+        segmento.title = reto.nombre + " · " + formatNumber(pintado) + " de " + formatNumber(reto.cantidad) + " subs";
+        segmento.append(pintura);
+        segmentosEl.append(segmento);
+      });
+      const hueco = Math.max(state.objetivo - suma(), 0);
+      const extra = Math.min(restante, hueco);
+      if (extra > 0) {
+        const segmento = document.createElement("div");
+        const pintura = document.createElement("div");
+        segmento.className = "segmento";
+        segmento.style.width = (extra / state.objetivo) * 100 + "%";
+        pintura.className = "pintura";
+        pintura.style.width = "100%";
+        pintura.style.background = "rgba(255, 255, 255, 0.55)";
+        segmento.title = "Subs recibidos · " + formatNumber(extra);
+        segmento.append(pintura);
+        segmentosEl.append(segmento);
+      }
       labelEl.textContent = shown + "%";
       barEl.setAttribute("aria-valuenow", String(Math.max(0, Math.min(shown, 100))));
       barEl.setAttribute("aria-valuetext", shown + "%");
-      totalEl.textContent = formatNumber(total) + " de " + formatNumber(state.objetivo) + " · " + formatSoles(total * VALOR_SUB_SOLES);
+      totalEl.textContent = "Recibidos " + formatNumber(state.recibidos) + " de " + formatNumber(state.objetivo) + " · " + formatSoles(state.recibidos * VALOR_SUB_SOLES);
 
-      const manual = state.orden === "manual";
-      ordenarEl.setAttribute("aria-pressed", manual ? "false" : "true");
-      avisoEl.hidden = !manual || state.retos.length === 0;
+      ordenarAscEl.setAttribute("aria-pressed", state.orden === "asc" ? "true" : "false");
+      ordenarDescEl.setAttribute("aria-pressed", state.orden === "desc" ? "true" : "false");
+      avisoEl.hidden = state.orden !== "manual" || state.retos.length === 0;
 
       listaEl.replaceChildren();
       state.retos.forEach((reto, index) => {
         const item = document.createElement("li");
+        const marca = document.createElement("span");
         const editando = reto.id === editandoId;
         const nombre = document.createElement(editando ? "input" : "span");
         const cantidad = document.createElement(editando ? "input" : "span");
@@ -475,6 +566,8 @@
           mover(id, destino);
         });
 
+        marca.className = "marca";
+        marca.style.background = colorDe(index);
         soles.className = "soles";
         soles.textContent = formatSoles(reto.cantidad * VALOR_SUB_SOLES);
         acciones.className = "acciones";
@@ -559,7 +652,7 @@
           acciones.append(subir, bajar, editar, quitar);
         }
 
-        item.append(nombre, cantidad, soles, acciones);
+        item.append(marca, nombre, cantidad, soles, acciones);
         listaEl.append(item);
       });
 

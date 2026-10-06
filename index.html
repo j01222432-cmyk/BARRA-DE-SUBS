@@ -77,10 +77,23 @@
       background: #14141c;
     }
 
-    .panel h1 {
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       margin-bottom: 16px;
+    }
+
+    .panel h1 {
       font-size: 1.15rem;
       font-weight: 700;
+    }
+
+    .aviso {
+      margin-top: 12px;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 0.9rem;
     }
 
     label {
@@ -159,11 +172,29 @@
       font-weight: 700;
     }
 
-    .quitar {
+    .acciones {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mover,
+    .quitar,
+    .ordenar {
       padding: 8px 12px;
       background: transparent;
       color: rgba(255, 255, 255, 0.8);
       border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .ordenar[aria-pressed="true"] {
+      border-color: transparent;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      color: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.35;
+      cursor: default;
     }
 
     .vacio {
@@ -172,7 +203,8 @@
     }
 
     @media (max-width: 700px) {
-      .reto-form {
+      .reto-form,
+      .lista li {
         grid-template-columns: 1fr;
       }
     }
@@ -198,25 +230,29 @@
     </section>
 
     <section class="panel">
-      <h1>Retos</h1>
+      <div class="panel-head">
+        <h1>Retos</h1>
+        <button type="button" class="ordenar" id="ordenar" aria-pressed="true">Menor a mayor</button>
+      </div>
       <label class="objetivo">
-        Objetivo
+        Objetivo por subs
         <input id="objetivo" type="number" min="1" step="any" value="100">
       </label>
 
       <form class="reto-form" id="reto-form">
         <label>
-          Reto
-          <input id="nombre" type="text" maxlength="80" autocomplete="off" required>
+          Reto por subs
+          <input id="nombre" type="text" maxlength="80" autocomplete="off" placeholder="Escribe tu reto" required>
         </label>
         <label>
-          Cantidad
+          Cantidad de subs
           <input id="cantidad" type="number" min="0" step="any" required>
         </label>
         <button type="submit">Agregar</button>
       </form>
       <p class="error" id="error" role="alert"></p>
       <p class="vacio" id="vacio">Todavía no hay retos.</p>
+      <p class="aviso" id="aviso" hidden>Orden manual. Pulsa «Menor a mayor» para volver a ordenar.</p>
       <ul class="lista" id="lista"></ul>
     </section>
   </main>
@@ -233,11 +269,22 @@
     const cantidadEl = document.getElementById("cantidad");
     const errorEl = document.getElementById("error");
     const vacioEl = document.getElementById("vacio");
+    const avisoEl = document.getElementById("aviso");
+    const ordenarEl = document.getElementById("ordenar");
     const listaEl = document.getElementById("lista");
+    let arrastrado = null;
 
     const state = load();
     objetivoEl.value = String(state.objetivo);
+    if (state.orden !== "manual") state.retos = ordenar(state.retos);
     render();
+
+    ordenarEl.addEventListener("click", () => {
+      state.orden = "auto";
+      state.retos = ordenar(state.retos);
+      save();
+      render();
+    });
 
     objetivoEl.addEventListener("input", () => {
       const objetivo = Number(objetivoEl.value);
@@ -262,6 +309,7 @@
         nombre,
         cantidad
       });
+      if (state.orden !== "manual") state.retos = ordenar(state.retos);
       nombreEl.value = "";
       cantidadEl.value = "";
       errorEl.textContent = "";
@@ -277,6 +325,7 @@
         const retos = Array.isArray(data && data.retos) ? data.retos : [];
         return {
           objetivo: Number.isFinite(objetivo) && objetivo > 0 ? objetivo : 100,
+          orden: data && data.orden === "manual" ? "manual" : "auto",
           retos: retos
             .filter((reto) => reto && String(reto.nombre || "").trim() && Number(reto.cantidad) > 0)
             .map((reto) => ({
@@ -286,7 +335,7 @@
             }))
         };
       } catch {
-        return { objetivo: 100, retos: [] };
+        return { objetivo: 100, orden: "auto", retos: [] };
       }
     }
 
@@ -296,6 +345,23 @@
 
     function suma() {
       return state.retos.reduce((total, reto) => total + reto.cantidad, 0);
+    }
+
+    function ordenar(retos) {
+      return retos
+        .map((reto, index) => ({ reto, index }))
+        .sort((a, b) => a.reto.cantidad - b.reto.cantidad || a.index - b.index)
+        .map((item) => item.reto);
+    }
+
+    function mover(id, destino) {
+      const origen = state.retos.findIndex((reto) => reto.id === id);
+      if (origen < 0 || destino < 0 || destino >= state.retos.length || origen === destino) return;
+      const [reto] = state.retos.splice(origen, 1);
+      state.retos.splice(destino, 0, reto);
+      state.orden = "manual";
+      save();
+      render();
     }
 
     function render() {
@@ -308,16 +374,52 @@
       barEl.setAttribute("aria-valuetext", shown + "%");
       totalEl.textContent = formatNumber(total) + " de " + formatNumber(state.objetivo);
 
+      const manual = state.orden === "manual";
+      ordenarEl.setAttribute("aria-pressed", manual ? "false" : "true");
+      avisoEl.hidden = !manual || state.retos.length === 0;
+
       listaEl.replaceChildren();
-      state.retos.forEach((reto) => {
+      state.retos.forEach((reto, index) => {
         const item = document.createElement("li");
         const nombre = document.createElement("span");
         const cantidad = document.createElement("span");
+        const acciones = document.createElement("div");
+        const subir = document.createElement("button");
+        const bajar = document.createElement("button");
         const quitar = document.createElement("button");
+
+        item.draggable = true;
+        item.addEventListener("dragstart", (event) => {
+          arrastrado = reto.id;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", reto.id);
+        });
+        item.addEventListener("dragover", (event) => event.preventDefault());
+        item.addEventListener("drop", (event) => {
+          event.preventDefault();
+          const id = event.dataTransfer.getData("text/plain") || arrastrado;
+          const destino = state.retos.findIndex((actual) => actual.id === reto.id);
+          arrastrado = null;
+          mover(id, destino);
+        });
 
         nombre.textContent = reto.nombre;
         cantidad.className = "cantidad";
         cantidad.textContent = formatNumber(reto.cantidad);
+        acciones.className = "acciones";
+
+        subir.type = "button";
+        subir.className = "mover";
+        subir.textContent = "Subir";
+        subir.disabled = index === 0;
+        subir.addEventListener("click", () => mover(reto.id, index - 1));
+
+        bajar.type = "button";
+        bajar.className = "mover";
+        bajar.textContent = "Bajar";
+        bajar.disabled = index === state.retos.length - 1;
+        bajar.addEventListener("click", () => mover(reto.id, index + 1));
+
         quitar.type = "button";
         quitar.className = "quitar";
         quitar.textContent = "Quitar";
@@ -327,7 +429,8 @@
           render();
         });
 
-        item.append(nombre, cantidad, quitar);
+        acciones.append(subir, bajar, quitar);
+        item.append(nombre, cantidad, acciones);
         listaEl.append(item);
       });
 

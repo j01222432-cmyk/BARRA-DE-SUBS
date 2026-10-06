@@ -13,8 +13,9 @@
 
     html,
     body {
-      height: 100%;
+      min-height: 100%;
       background: #0a0a0f;
+      color: #fff;
       font-family: "Segoe UI", system-ui, sans-serif;
     }
 
@@ -22,11 +23,26 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 32px 16px;
+    }
+
+    main {
+      width: min(80vw, 920px);
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .total {
+      margin-bottom: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
     }
 
     .bar {
       position: relative;
-      width: min(80vw, 920px);
       height: 84px;
       overflow: hidden;
       border: 2px solid rgba(255, 255, 255, 0.14);
@@ -36,9 +52,10 @@
     }
 
     .fill {
-      width: 100%;
+      width: 0%;
       height: 100%;
       background: linear-gradient(90deg, #7c3aed, #ec4899);
+      transition: width 0.35s ease;
     }
 
     .label {
@@ -47,18 +64,279 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #fff;
       font-size: clamp(1.8rem, 4vw, 2.6rem);
       font-weight: 800;
       letter-spacing: 0.04em;
       text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     }
+
+    .panel {
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      background: #14141c;
+    }
+
+    .panel h1 {
+      margin-bottom: 16px;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    label {
+      display: block;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      background: #0a0a0f;
+      color: #fff;
+      font: inherit;
+    }
+
+    .objetivo {
+      max-width: 180px;
+      margin-bottom: 16px;
+    }
+
+    .reto-form {
+      display: grid;
+      grid-template-columns: 1fr 140px auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button[type="submit"] {
+      height: 46px;
+      padding: 0 18px;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .error {
+      min-height: 1.2em;
+      margin-top: 10px;
+      color: #fb7185;
+      font-size: 0.9rem;
+    }
+
+    .lista {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 240px;
+      margin-top: 8px;
+      overflow: auto;
+      list-style: none;
+    }
+
+    .lista li {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #0a0a0f;
+    }
+
+    .cantidad {
+      font-weight: 700;
+    }
+
+    .quitar {
+      padding: 8px 12px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .vacio {
+      margin-top: 12px;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    @media (max-width: 700px) {
+      .reto-form {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="bar" role="img" aria-label="100%">
-    <div class="fill"></div>
-    <span class="label">100%</span>
-  </div>
+  <main>
+    <section>
+      <p class="total" id="total">0 de 100</p>
+      <div
+        class="bar"
+        id="bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        aria-valuetext="0%"
+        aria-label="Progreso de retos"
+      >
+        <div class="fill" id="fill"></div>
+        <span class="label" id="label">0%</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h1>Retos</h1>
+      <label class="objetivo">
+        Objetivo
+        <input id="objetivo" type="number" min="1" step="any" value="100">
+      </label>
+
+      <form class="reto-form" id="reto-form">
+        <label>
+          Reto
+          <input id="nombre" type="text" maxlength="80" autocomplete="off" required>
+        </label>
+        <label>
+          Cantidad
+          <input id="cantidad" type="number" min="0" step="any" required>
+        </label>
+        <button type="submit">Agregar</button>
+      </form>
+      <p class="error" id="error" role="alert"></p>
+      <p class="vacio" id="vacio">Todavía no hay retos.</p>
+      <ul class="lista" id="lista"></ul>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "barra-de-subs";
+    const totalEl = document.getElementById("total");
+    const barEl = document.getElementById("bar");
+    const fillEl = document.getElementById("fill");
+    const labelEl = document.getElementById("label");
+    const objetivoEl = document.getElementById("objetivo");
+    const formEl = document.getElementById("reto-form");
+    const nombreEl = document.getElementById("nombre");
+    const cantidadEl = document.getElementById("cantidad");
+    const errorEl = document.getElementById("error");
+    const vacioEl = document.getElementById("vacio");
+    const listaEl = document.getElementById("lista");
+
+    const state = load();
+    objetivoEl.value = String(state.objetivo);
+    render();
+
+    objetivoEl.addEventListener("input", () => {
+      const objetivo = Number(objetivoEl.value);
+      if (!Number.isFinite(objetivo) || objetivo <= 0) return;
+      state.objetivo = objetivo;
+      save();
+      render();
+    });
+
+    formEl.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const nombre = nombreEl.value.trim();
+      const cantidad = Number(cantidadEl.value);
+
+      if (!nombre || !Number.isFinite(cantidad) || cantidad <= 0) {
+        errorEl.textContent = "Escribe un reto y una cantidad mayor que 0.";
+        return;
+      }
+
+      state.retos.push({
+        id: crypto.randomUUID(),
+        nombre,
+        cantidad
+      });
+      nombreEl.value = "";
+      cantidadEl.value = "";
+      errorEl.textContent = "";
+      save();
+      render();
+      nombreEl.focus();
+    });
+
+    function load() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const objetivo = Number(data && data.objetivo);
+        const retos = Array.isArray(data && data.retos) ? data.retos : [];
+        return {
+          objetivo: Number.isFinite(objetivo) && objetivo > 0 ? objetivo : 100,
+          retos: retos
+            .filter((reto) => reto && String(reto.nombre || "").trim() && Number(reto.cantidad) > 0)
+            .map((reto) => ({
+              id: reto.id || crypto.randomUUID(),
+              nombre: String(reto.nombre).trim(),
+              cantidad: Number(reto.cantidad)
+            }))
+        };
+      } catch {
+        return { objetivo: 100, retos: [] };
+      }
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function suma() {
+      return state.retos.reduce((total, reto) => total + reto.cantidad, 0);
+    }
+
+    function render() {
+      const total = suma();
+      const pct = (total / state.objetivo) * 100;
+      const shown = Math.round(pct);
+      fillEl.style.width = Math.max(0, Math.min(pct, 100)) + "%";
+      labelEl.textContent = shown + "%";
+      barEl.setAttribute("aria-valuenow", String(Math.max(0, Math.min(shown, 100))));
+      barEl.setAttribute("aria-valuetext", shown + "%");
+      totalEl.textContent = formatNumber(total) + " de " + formatNumber(state.objetivo);
+
+      listaEl.replaceChildren();
+      state.retos.forEach((reto) => {
+        const item = document.createElement("li");
+        const nombre = document.createElement("span");
+        const cantidad = document.createElement("span");
+        const quitar = document.createElement("button");
+
+        nombre.textContent = reto.nombre;
+        cantidad.className = "cantidad";
+        cantidad.textContent = formatNumber(reto.cantidad);
+        quitar.type = "button";
+        quitar.className = "quitar";
+        quitar.textContent = "Quitar";
+        quitar.addEventListener("click", () => {
+          state.retos = state.retos.filter((item) => item.id !== reto.id);
+          save();
+          render();
+        });
+
+        item.append(nombre, cantidad, quitar);
+        listaEl.append(item);
+      });
+
+      vacioEl.hidden = state.retos.length > 0;
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 2 }).format(value);
+    }
+  </script>
 </body>
 </html>

@@ -152,7 +152,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-height: 240px;
+      max-height: 320px;
       margin-top: 8px;
       overflow: auto;
       list-style: none;
@@ -188,13 +188,31 @@
       gap: 6px;
     }
 
+    .lista input {
+      margin-top: 0;
+      padding: 8px 10px;
+    }
+
+    .editar-cantidad {
+      width: 110px;
+    }
+
     .mover,
     .quitar,
+    .editar,
+    .cancelar,
     .ordenar {
       padding: 8px 12px;
       background: transparent;
       color: rgba(255, 255, 255, 0.8);
       border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .guardar {
+      padding: 8px 12px;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      color: #fff;
+      font-weight: 700;
     }
 
     .ordenar[aria-pressed="true"] {
@@ -287,6 +305,7 @@
     const ordenarEl = document.getElementById("ordenar");
     const listaEl = document.getElementById("lista");
     let arrastrado = null;
+    let editandoId = null;
 
     const state = load();
     objetivoEl.value = String(state.objetivo);
@@ -294,6 +313,7 @@
     render();
 
     ordenarEl.addEventListener("click", () => {
+      editandoId = null;
       state.orden = "auto";
       state.retos = ordenar(state.retos);
       save();
@@ -333,6 +353,7 @@
         cantidad
       });
       if (state.orden !== "manual") state.retos = ordenar(state.retos);
+      editandoId = null;
       nombreEl.value = "";
       cantidadEl.value = "";
       errorEl.textContent = "";
@@ -384,6 +405,28 @@
       const [reto] = state.retos.splice(origen, 1);
       state.retos.splice(destino, 0, reto);
       state.orden = "manual";
+      editandoId = null;
+      save();
+      render();
+    }
+
+    function guardarEdicion(id) {
+      const reto = state.retos.find((item) => item.id === id);
+      const nombreInput = listaEl.querySelector(".editar-nombre");
+      const cantidadInput = listaEl.querySelector(".editar-cantidad");
+      const nombre = nombreInput ? nombreInput.value.trim() : "";
+      const cantidad = cantidadInput ? Number(cantidadInput.value) : NaN;
+
+      if (!reto || !nombre || !Number.isFinite(cantidad) || cantidad <= 0) {
+        errorEl.textContent = "Escribe un reto y una cantidad mayor que 0.";
+        return;
+      }
+
+      reto.nombre = nombre;
+      reto.cantidad = cantidad;
+      if (state.orden !== "manual") state.retos = ordenar(state.retos);
+      editandoId = null;
+      errorEl.textContent = "";
       save();
       render();
     }
@@ -405,15 +448,19 @@
       listaEl.replaceChildren();
       state.retos.forEach((reto, index) => {
         const item = document.createElement("li");
-        const nombre = document.createElement("span");
-        const cantidad = document.createElement("span");
+        const editando = reto.id === editandoId;
+        const nombre = document.createElement(editando ? "input" : "span");
+        const cantidad = document.createElement(editando ? "input" : "span");
         const soles = document.createElement("span");
         const acciones = document.createElement("div");
         const subir = document.createElement("button");
         const bajar = document.createElement("button");
+        const editar = document.createElement("button");
+        const guardar = document.createElement("button");
+        const cancelar = document.createElement("button");
         const quitar = document.createElement("button");
 
-        item.draggable = true;
+        item.draggable = !editando;
         item.addEventListener("dragstart", (event) => {
           arrastrado = reto.id;
           event.dataTransfer.effectAllowed = "move";
@@ -428,35 +475,90 @@
           mover(id, destino);
         });
 
-        nombre.textContent = reto.nombre;
-        cantidad.className = "cantidad";
-        cantidad.textContent = formatNumber(reto.cantidad) + " subs";
         soles.className = "soles";
         soles.textContent = formatSoles(reto.cantidad * VALOR_SUB_SOLES);
         acciones.className = "acciones";
 
-        subir.type = "button";
-        subir.className = "mover";
-        subir.textContent = "Subir";
-        subir.disabled = index === 0;
-        subir.addEventListener("click", () => mover(reto.id, index - 1));
+        if (editando) {
+          nombre.className = "editar-nombre";
+          nombre.value = reto.nombre;
+          nombre.maxLength = 80;
+          cantidad.className = "editar-cantidad";
+          cantidad.type = "number";
+          cantidad.min = "0";
+          cantidad.step = "any";
+          cantidad.value = String(reto.cantidad);
+          cantidad.addEventListener("input", () => {
+            const valor = Number(cantidad.value);
+            soles.textContent = Number.isFinite(valor) && valor > 0
+              ? formatSoles(valor * VALOR_SUB_SOLES)
+              : "";
+          });
+          [nombre, cantidad].forEach((campo) => {
+            campo.addEventListener("keydown", (event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                guardarEdicion(reto.id);
+              }
+            });
+          });
 
-        bajar.type = "button";
-        bajar.className = "mover";
-        bajar.textContent = "Bajar";
-        bajar.disabled = index === state.retos.length - 1;
-        bajar.addEventListener("click", () => mover(reto.id, index + 1));
+          guardar.type = "button";
+          guardar.className = "guardar";
+          guardar.textContent = "Guardar";
+          guardar.addEventListener("click", () => guardarEdicion(reto.id));
 
-        quitar.type = "button";
-        quitar.className = "quitar";
-        quitar.textContent = "Quitar";
-        quitar.addEventListener("click", () => {
-          state.retos = state.retos.filter((item) => item.id !== reto.id);
-          save();
-          render();
-        });
+          cancelar.type = "button";
+          cancelar.className = "cancelar";
+          cancelar.textContent = "Cancelar";
+          cancelar.addEventListener("click", () => {
+            editandoId = null;
+            errorEl.textContent = "";
+            render();
+          });
 
-        acciones.append(subir, bajar, quitar);
+          acciones.append(guardar, cancelar);
+        } else {
+          nombre.textContent = reto.nombre;
+          cantidad.className = "cantidad";
+          cantidad.textContent = formatNumber(reto.cantidad) + " subs";
+
+          subir.type = "button";
+          subir.className = "mover";
+          subir.textContent = "Subir";
+          subir.disabled = index === 0;
+          subir.addEventListener("click", () => mover(reto.id, index - 1));
+
+          bajar.type = "button";
+          bajar.className = "mover";
+          bajar.textContent = "Bajar";
+          bajar.disabled = index === state.retos.length - 1;
+          bajar.addEventListener("click", () => mover(reto.id, index + 1));
+
+          editar.type = "button";
+          editar.className = "editar";
+          editar.textContent = "Editar";
+          editar.addEventListener("click", () => {
+            editandoId = reto.id;
+            errorEl.textContent = "";
+            render();
+            const campo = listaEl.querySelector(".editar-nombre");
+            if (campo) campo.focus();
+          });
+
+          quitar.type = "button";
+          quitar.className = "quitar";
+          quitar.textContent = "Quitar";
+          quitar.addEventListener("click", () => {
+            editandoId = null;
+            state.retos = state.retos.filter((item) => item.id !== reto.id);
+            save();
+            render();
+          });
+
+          acciones.append(subir, bajar, editar, quitar);
+        }
+
         item.append(nombre, cantidad, soles, acciones);
         listaEl.append(item);
       });

@@ -217,9 +217,14 @@
       color: rgba(255, 255, 255, 0.72);
     }
 
-    .equivalencia {
+    .equivalencia,
+    .kick-estado {
       margin-top: 10px;
       font-size: 0.92rem;
+    }
+
+    .kick-estado {
+      color: #86efac;
     }
 
     .acciones {
@@ -316,6 +321,7 @@
           <input id="recibidos" type="number" min="0" step="any" value="0">
         </label>
       </div>
+      <p class="kick-estado" id="kick-estado" hidden>Kick conectado. Las subs nuevas y las regaladas se suman solas.</p>
 
       <form class="reto-form" id="reto-form">
         <label>
@@ -345,6 +351,7 @@
     const labelEl = document.getElementById("label");
     const objetivoEl = document.getElementById("objetivo");
     const recibidosEl = document.getElementById("recibidos");
+    const kickEstadoEl = document.getElementById("kick-estado");
     const formEl = document.getElementById("reto-form");
     const nombreEl = document.getElementById("nombre");
     const cantidadEl = document.getElementById("cantidad");
@@ -364,6 +371,35 @@
     recibidosEl.value = String(state.recibidos);
     if (state.orden !== "manual") state.retos = ordenar(state.retos, state.orden);
     render();
+    sincronizarKick();
+    setInterval(sincronizarKick, 3000);
+
+    async function sincronizarKick() {
+      let respuesta;
+      try {
+        const origen = new URLSearchParams(location.search).get("kick");
+        const destino = origen ? origen.replace(/\/$/, "") + "/api/contador" : "/api/contador";
+        respuesta = await fetch(destino, { cache: "no-store" });
+      } catch {
+        return;
+      }
+      if (!respuesta.ok) return;
+      const datos = await respuesta.json();
+      const total = Number(datos && datos.total);
+      if (!Number.isFinite(total) || total < 0) return;
+      kickEstadoEl.hidden = false;
+      if (state.kickVisto == null || total < state.kickVisto) {
+        state.kickVisto = total;
+        save();
+        return;
+      }
+      if (total === state.kickVisto) return;
+      state.recibidos += total - state.kickVisto;
+      state.kickVisto = total;
+      recibidosEl.value = String(state.recibidos);
+      save();
+      render();
+    }
 
     ordenarAscEl.addEventListener("click", () => aplicarOrden("asc"));
     ordenarDescEl.addEventListener("click", () => aplicarOrden("desc"));
@@ -428,6 +464,7 @@
         return {
           objetivo: Number.isFinite(objetivo) && objetivo > 0 ? objetivo : 100,
           recibidos: Number.isFinite(recibidos) && recibidos >= 0 ? recibidos : 0,
+          kickVisto: data && Number.isFinite(Number(data.kickVisto)) ? Number(data.kickVisto) : null,
           orden: data && data.orden === "manual" ? "manual" : data && data.orden === "desc" ? "desc" : "asc",
           retos: retos
             .filter((reto) => reto && String(reto.nombre || "").trim() && Number(reto.cantidad) > 0)
@@ -438,7 +475,7 @@
             }))
         };
       } catch {
-        return { objetivo: 100, recibidos: 0, orden: "asc", retos: [] };
+        return { objetivo: 100, recibidos: 0, kickVisto: null, orden: "asc", retos: [] };
       }
     }
 
